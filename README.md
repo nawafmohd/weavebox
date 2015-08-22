@@ -78,7 +78,7 @@ In this case box friends will inherit middleware1 and middleware2 from its paren
 Now box friends will have only middleware3 and middleware4 attached.
 
 ## Static files
-Make our assets are accessable trough /assets/styles.css
+Make our assets accessable trough /assets/styles.css
 
     app := weavebox.New()
     app.Static("/assets", "public/assets")
