@@ -1,0 +1,4 @@
+# profiling rests
+*.cpu
+*.test
+*.mem
