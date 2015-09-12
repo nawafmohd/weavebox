@@ -347,6 +347,12 @@ func (c *Context) Header(name string) string {
 	return c.request.Header.Get(name)
 }
 
+// SetHeader set a header to the response. If the header allready exists the
+// value will be overidden.
+func (c *Context) SetHeader(key, value string) {
+	c.response.Header().Set(key, value)
+}
+
 // Redirect redirects the request to the provided URL with the given status code.
 func (c *Context) Redirect(url string, code int) error {
 	if code < http.StatusMultipleChoices || code > http.StatusTemporaryRedirect {

@@ -357,6 +357,18 @@ func TestContextHeader(t *testing.T) {
 	}
 }
 
+func TestSetHeader(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/", nil)
+	resp := httptest.NewRecorder()
+	ctx := &Context{request: req, response: resp}
+
+	ctx.SetHeader("X-Test", "foo")
+	ctx.SetHeader("X-Test", "bar")
+	if want, have := "bar", ctx.response.Header().Get("X-Test"); want != have {
+		t.Errorf("expecting %s have %s", want, have)
+	}
+}
+
 func isHTTPStatusOK(t *testing.T, code int) {
 	if code != http.StatusOK {
 		t.Errorf("Expecting status 200 got %d", code)
