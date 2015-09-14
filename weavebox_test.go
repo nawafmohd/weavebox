@@ -231,6 +231,21 @@ func TestBoxMiddlewareInheritsParent(t *testing.T) {
 	}
 }
 
+func TestParentNotInheritBoxMiddleware(t *testing.T) {
+	buf := &bytes.Buffer{}
+	w := New()
+	w.Get("/foo", noopHandler)
+	sub := w.Box("/sub")
+	sub.Use(func(ctx *Context) error {
+		buf.WriteString("a")
+		return nil
+	})
+	doRequest(t, "GET", "/foo", nil, w)
+	if buf.String() == "a" {
+		t.Error("parent cannot inherit box middleware")
+	}
+}
+
 func TestErrorHandler(t *testing.T) {
 	w := New()
 	errorMsg := "oops! something went wrong"
