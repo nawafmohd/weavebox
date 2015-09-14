@@ -303,7 +303,7 @@ func TestSetNotFound(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte(notFoundMsg))
 	})
-	w.SetNotFound(h)
+	w.SetNotFoundHandler(h)
 
 	code, body := doRequest(t, "GET", "/", nil, w)
 	if code != http.StatusNotFound {
