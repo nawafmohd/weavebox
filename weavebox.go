@@ -43,7 +43,7 @@ type Weavebox struct {
 
 	templateEngine Renderer
 	router         *httprouter.Router
-	middleware     []Handler
+	middleware     []Middleware
 	prefix         string
 	context        context.Context
 	logger         kitlog.Logger
@@ -155,9 +155,12 @@ func (w *Weavebox) BindContext(ctx context.Context) {
 	w.context = ctx
 }
 
+// Middleware is decorator pattern for wrapping weavebox.Handler functions.
+type Middleware func(Handler) Handler
+
 // Use appends a Handler to the box middleware. Different middleware can be set
 // for each subrouter (Box).
-func (w *Weavebox) Use(handlers ...Handler) {
+func (w *Weavebox) Use(handlers ...Middleware) {
 	for _, h := range handlers {
 		w.middleware = append(w.middleware, h)
 	}
@@ -250,11 +253,8 @@ func (w *Weavebox) makeHTTPRouterHandle(h Handler) httprouter.Handle {
 			}
 		}()
 
-		for _, handler := range w.middleware {
-			if err := handler(ctx); err != nil {
-				w.ErrorHandler(ctx, err)
-				return
-			}
+		for i := len(w.middleware) - 1; i >= 0; i-- {
+			h = w.middleware[i](h)
 		}
 		if err := h(ctx); err != nil {
 			w.ErrorHandler(ctx, err)
