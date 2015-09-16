@@ -3,7 +3,7 @@ package main
 import (
 	"net/http"
 
-	"github.com/twanies/weavebox"
+	"github.com/weavebox/weavebox"
 )
 
 func main() {

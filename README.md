@@ -1,8 +1,8 @@
-# weavebox [![GoDoc](https://godoc.org/github.com/twanies/weavebox?status.svg)](https://godoc.org/github.com/twanies/weavebox) [![Travis CI](https://travis-ci.org/twanies/weavebox.svg?branch=master)](https://travis-ci.org/twanies/weavebox)
+# weavebox [![GoDoc](https://godoc.org/github.com/weavebox/weavebox?status.svg)](https://godoc.org/github.com/weavebox/weavebox) [![Travis CI](https://travis-ci.org/twanies/weavebox.svg?branch=master)](https://travis-ci.org/twanies/weavebox)
 Minimalistic web framework for the Go programming language.
 
 ## Installation
-`go get github.com/twanies/weavebox`
+`go get github.com/weavebox/weavebox`
 
 ## Features
 - fast route dispatching backed by httprouter
@@ -14,7 +14,7 @@ Minimalistic web framework for the Go programming language.
 
 ## Basic usage
     package main
-    import "github.com/twanies/weavebox"
+    import "github.com/weavebox/weavebox"
 
     func main() {
         app := weavebox.New()
