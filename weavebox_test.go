@@ -97,18 +97,22 @@ func TestStatic(t *testing.T) {
 func TestContext(t *testing.T) {
 	w := New()
 	w.Get("/", checkContext(t, "m1", "m1"))
-	w.Use(func(ctx *Context) error {
-		ctx.Context = context.WithValue(ctx.Context, "m1", "m1")
-		return nil
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			c.Context = context.WithValue(c.Context, "m1", "m1")
+			return next(c)
+		}
 	})
 	code, _ := doRequest(t, "GET", "/", nil, w)
 	isHTTPStatusOK(t, code)
 
 	w.Get("/some", checkContext(t, "m1", "m2"))
-	w.Use(func(ctx *Context) error {
-		ctx.Context = context.WithValue(ctx.Context, "m1", "m2")
-		ctx.Response().WriteHeader(http.StatusBadRequest)
-		return nil
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			c.Context = context.WithValue(c.Context, "m1", "m2")
+			c.Response().WriteHeader(http.StatusBadRequest)
+			return next(c)
+		}
 	})
 	code, _ = doRequest(t, "GET", "/some", nil, w)
 	if code != http.StatusBadRequest {
@@ -120,9 +124,11 @@ func TestContextWithSubrouter(t *testing.T) {
 	w := New()
 	sub := w.Box("/test")
 	sub.Get("/", checkContext(t, "a", "b"))
-	sub.Use(func(ctx *Context) error {
-		ctx.Context = context.WithValue(ctx.Context, "a", "b")
-		return nil
+	sub.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			c.Context = context.WithValue(c.Context, "a", "b")
+			return next(c)
+		}
 	})
 	code, _ := doRequest(t, "GET", "/test", nil, w)
 	if code != http.StatusOK {
@@ -168,22 +174,31 @@ func checkContext(t *testing.T, key, expect string) Handler {
 func TestMiddleware(t *testing.T) {
 	buf := &bytes.Buffer{}
 	w := New()
-	w.Use(func(ctx *Context) error {
-		buf.WriteString("a")
-		return nil
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			buf.WriteString("a")
+			return next(c)
+		}
 	})
-	w.Use(func(ctx *Context) error {
-		buf.WriteString("b")
-		return nil
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			buf.WriteString("b")
+			return next(c)
+		}
 	})
-	w.Use(func(ctx *Context) error {
-		buf.WriteString("c")
-		return nil
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			buf.WriteString("c")
+			return next(c)
+		}
 	})
-	w.Use(func(ctx *Context) error {
-		buf.WriteString("d")
-		return nil
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			buf.WriteString("d")
+			return next(c)
+		}
 	})
+
 	w.Get("/", noopHandler)
 	code, _ := doRequest(t, "GET", "/", nil, w)
 	isHTTPStatusOK(t, code)
@@ -195,14 +210,20 @@ func TestMiddleware(t *testing.T) {
 func TestBoxMiddlewareReset(t *testing.T) {
 	buf := &bytes.Buffer{}
 	w := New()
-	w.Use(func(ctx *Context) error {
-		buf.WriteString("a")
-		return nil
+
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			buf.WriteString("a")
+			return next(c)
+		}
 	})
-	w.Use(func(ctx *Context) error {
-		buf.WriteString("b")
-		return nil
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			buf.WriteString("b")
+			return next(c)
+		}
 	})
+
 	sub := w.Box("/sub").ResetMiddleware()
 	sub.Get("/", noopHandler)
 	code, _ := doRequest(t, "GET", "/sub", nil, w)
@@ -215,14 +236,20 @@ func TestBoxMiddlewareReset(t *testing.T) {
 func TestBoxMiddlewareInheritsParent(t *testing.T) {
 	buf := &bytes.Buffer{}
 	w := New()
-	w.Use(func(ctx *Context) error {
-		buf.WriteString("a")
-		return nil
+
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			buf.WriteString("a")
+			return next(c)
+		}
 	})
-	w.Use(func(ctx *Context) error {
-		buf.WriteString("b")
-		return nil
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			buf.WriteString("b")
+			return next(c)
+		}
 	})
+
 	sub := w.Box("/sub")
 	sub.Get("/", noopHandler)
 	code, _ := doRequest(t, "GET", "/sub", nil, w)
@@ -237,10 +264,14 @@ func TestParentNotInheritBoxMiddleware(t *testing.T) {
 	w := New()
 	w.Get("/foo", noopHandler)
 	sub := w.Box("/sub")
-	sub.Use(func(ctx *Context) error {
-		buf.WriteString("a")
-		return nil
+
+	sub.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			buf.WriteString("a")
+			return next(c)
+		}
 	})
+
 	doRequest(t, "GET", "/foo", nil, w)
 	if buf.String() == "a" {
 		t.Error("parent cannot inherit box middleware")
@@ -256,9 +287,13 @@ func TestErrorHandler(t *testing.T) {
 			t.Error("expecting %s, got %s", errorMsg, err.Error())
 		}
 	})
-	w.Use(func(ctx *Context) error {
-		return errors.New(errorMsg)
+
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			return errors.New(errorMsg)
+		}
 	})
+
 	w.Get("/", noopHandler)
 	code, _ := doRequest(t, "GET", "/", nil, w)
 	if code != http.StatusInternalServerError {
@@ -387,15 +422,19 @@ func TestSetHeader(t *testing.T) {
 
 func TestContextSetGet(t *testing.T) {
 	w := New()
-	w.Use(func(c *Context) error {
-		c.Set("foo", "bar")
-		return nil
-	})
-	w.Use(func(c *Context) error {
-		if want, have := "bar", c.Get("foo").(string); want != have {
-			t.Error("expected %s but got %s", want, have)
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			c.Set("foo", "bar")
+			return nil
 		}
-		return nil
+	})
+	w.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			if want, have := "bar", c.Get("foo").(string); want != have {
+				t.Error("expected %s but got %s", want, have)
+			}
+			return nil
+		}
 	})
 	w.Get("/", noopHandler)
 	code, _ := doRequest(t, "GET", "/", nil, w)

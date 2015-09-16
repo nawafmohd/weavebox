@@ -55,23 +55,27 @@ func newDatastoreContext(parent context.Context, ds *datastore) context.Context 
 	return &dbContext{parent, ds}
 }
 
-func dbContextHandler(ctx *weavebox.Context) error {
-	db := datastore{"mydatabase"}
-	ctx.Context = newDatastoreContext(ctx.Context, &db)
-	return nil
+func dbContextHandler(next weavebox.Handler) weavebox.Handler {
+	return func(c *weavebox.Context) error {
+		db := datastore{"mydatabase"}
+		c.Context = newDatastoreContext(c.Context, &db)
+		return next(c)
+	}
 }
 
 // Only the powerfull have access to the admin routes
-func authenticate(ctx *weavebox.Context) error {
-	admins := []string{"toby", "master iy", "c.froome"}
-	name := ctx.Param("name")
+func authenticate(next weavebox.Handler) weavebox.Handler {
+	return func(c *weavebox.Context) error {
+		admins := []string{"toby", "master iy", "c.froome"}
+		name := c.Param("name")
 
-	for _, admin := range admins {
-		if admin == name {
-			return nil
+		for _, admin := range admins {
+			if admin != name {
+				return errors.New("access forbidden")
+			}
 		}
+		return next(c)
 	}
-	return errors.New("access forbidden")
 }
 
 // context helper function to stay lean and mean in your handlers
