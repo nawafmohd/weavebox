@@ -2,6 +2,7 @@ package weavebox
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -202,7 +203,7 @@ func TestBoxMiddlewareReset(t *testing.T) {
 		buf.WriteString("b")
 		return nil
 	})
-	sub := w.Box("/sub").Reset()
+	sub := w.Box("/sub").ResetMiddleware()
 	sub.Get("/", noopHandler)
 	code, _ := doRequest(t, "GET", "/sub", nil, w)
 	isHTTPStatusOK(t, code)
@@ -381,6 +382,53 @@ func TestSetHeader(t *testing.T) {
 	ctx.SetHeader("X-Test", "bar")
 	if want, have := "bar", ctx.response.Header().Get("X-Test"); want != have {
 		t.Errorf("expecting %s have %s", want, have)
+	}
+}
+
+func TestContextSetGet(t *testing.T) {
+	w := New()
+	w.Use(func(c *Context) error {
+		c.Set("foo", "bar")
+		return nil
+	})
+	w.Use(func(c *Context) error {
+		if want, have := "bar", c.Get("foo").(string); want != have {
+			t.Error("expected %s but got %s", want, have)
+		}
+		return nil
+	})
+	w.Get("/", noopHandler)
+	code, _ := doRequest(t, "GET", "/", nil, w)
+	isHTTPStatusOK(t, code)
+}
+
+func TestHTTPError(t *testing.T) {
+	handler := func(code int, desc string) Handler {
+		return func(c *Context) error {
+			return c.HTTPError(code, desc)
+		}
+	}
+
+	w := New()
+	w.SetErrorHandler(func(c *Context, err error) {
+		if httpErr, ok := err.(HTTPError); ok {
+			c.JSON(httpErr.Code, httpErr)
+		}
+	})
+	w.Get("/foo", handler(http.StatusBadRequest, "bad request"))
+
+	code, body := doRequest(t, "GET", "/foo", nil, w)
+	if code != http.StatusBadRequest {
+		t.Error("expected %d but have %s", http.StatusBadRequest, code)
+	}
+
+	var httpErr HTTPError
+	r := bytes.NewBufferString(body)
+	if err := json.NewDecoder(r).Decode(&httpErr); err != nil {
+		t.Error(err)
+	}
+	if want, have := "bad request", httpErr.Description; want != have {
+		t.Error("expected %s but have %s", want, have)
 	}
 }
 
