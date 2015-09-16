@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"runtime"
 	"time"
 
+	kitlog "github.com/go-kit/kit/log"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/net/context"
 )
@@ -44,6 +46,7 @@ type Weavebox struct {
 	middleware     []Handler
 	prefix         string
 	context        context.Context
+	logger         kitlog.Logger
 }
 
 // New returns a new Weavebox object
@@ -53,6 +56,7 @@ func New() *Weavebox {
 		Output:          os.Stderr,
 		ErrorHandler:    defaultErrorHandler,
 		EnableAccessLog: false,
+		logger:          kitlog.NewLogfmtLogger(os.Stderr),
 	}
 }
 
@@ -235,6 +239,17 @@ func (w *Weavebox) makeHTTPRouterHandle(h Handler) httprouter.Handle {
 			request:  r,
 			weavebox: w,
 		}
+
+		defer func() {
+			if err := recover(); err != nil {
+				trace := make([]byte, 256)
+				n := runtime.Stack(trace, true)
+				w.logger.Log("recoverd", err, "stacktrace", string(trace[:n]))
+				w.ErrorHandler(ctx, fmt.Errorf("%v", err))
+				return
+			}
+		}()
+
 		for _, handler := range w.middleware {
 			if err := handler(ctx); err != nil {
 				w.ErrorHandler(ctx, err)
@@ -400,6 +415,14 @@ func (c *Context) HTTPError(code int, desc string) HTTPError {
 		Code:        code,
 		Description: desc,
 	}
+}
+
+// Log provides a structured logging tool based on go-kit's logger. Weavebox
+// thinks structured logging is key in modern api's and webapps, its readable and
+// eazy for machines to parse it.
+// EG: c.Log("handler", "CreateUser", "input", User, "took", time.Since(start))
+func (c *Context) Log(keyvals ...interface{}) {
+	c.weavebox.logger.Log(keyvals...)
 }
 
 type responseLogger struct {
