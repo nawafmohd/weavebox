@@ -104,26 +104,34 @@ func (s *server) serve(l net.Listener) error {
 	}
 }
 
+var (
+	SIGUSR2 = syscall.Signal(0xc)
+	SIGKILL = syscall.Signal(0x9)
+	SIGTERM = syscall.Signal(0xf)
+	SIGQUIT = syscall.Signal(0x3)
+	SIGINT = syscall.Signal(0x2)
+)
+
 func (s *server) closeNotify(l net.Listener) {
 	sig := make(chan os.Signal, 1)
 
 	signal.Notify(
 		sig,
-		syscall.SIGTERM,
-		syscall.SIGKILL,
-		syscall.SIGQUIT,
-		syscall.SIGUSR2,
-		syscall.SIGINT,
+		SIGTERM,
+		SIGKILL,
+		SIGQUIT,
+		SIGUSR2,
+		SIGINT,
 	)
 	sign := <-sig
 	switch sign {
-	case syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT:
+	case SIGTERM, SIGQUIT, SIGINT:
 		l.Close()
 		s.quit <- struct{}{}
-	case syscall.SIGKILL:
+	case SIGKILL:
 		l.Close()
 		s.fquit <- struct{}{}
-	case syscall.SIGUSR2:
+	case SIGUSR2:
 		panic("USR2 => not implemented")
 	}
 }
