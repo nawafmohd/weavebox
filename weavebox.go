@@ -9,10 +9,8 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"runtime"
 	"time"
 
-	kitlog "github.com/go-kit/kit/log"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/net/context"
 )
@@ -43,10 +41,9 @@ type Weavebox struct {
 
 	templateEngine Renderer
 	router         *httprouter.Router
-	middleware     []Middleware
+	middleware     []Handler
 	prefix         string
 	context        context.Context
-	logger         kitlog.Logger
 }
 
 // New returns a new Weavebox object
@@ -56,7 +53,6 @@ func New() *Weavebox {
 		Output:          os.Stderr,
 		ErrorHandler:    defaultErrorHandler,
 		EnableAccessLog: false,
-		logger:          kitlog.NewLogfmtLogger(os.Stderr),
 	}
 }
 
@@ -155,12 +151,9 @@ func (w *Weavebox) BindContext(ctx context.Context) {
 	w.context = ctx
 }
 
-// Middleware is decorator pattern for wrapping weavebox.Handler functions.
-type Middleware func(Handler) Handler
-
 // Use appends a Handler to the box middleware. Different middleware can be set
 // for each subrouter (Box).
-func (w *Weavebox) Use(handlers ...Middleware) {
+func (w *Weavebox) Use(handlers ...Handler) {
 	for _, h := range handlers {
 		w.middleware = append(w.middleware, h)
 	}
@@ -179,8 +172,8 @@ type Box struct {
 	Weavebox
 }
 
-// ResetMiddleware clears all middleware of a box
-func (b *Box) ResetMiddleware() *Box {
+// Reset clears all middleware
+func (b *Box) Reset() *Box {
 	b.Weavebox.middleware = nil
 	return b
 }
@@ -191,9 +184,9 @@ func (w *Weavebox) SetTemplateEngine(t Renderer) {
 	w.templateEngine = t
 }
 
-// SetNotFoundHandler sets a custom handler that is invoked whenever the
+// SetNotFound sets a custom handler that is invoked whenever the
 // router could not match a route against the request url.
-func (w *Weavebox) SetNotFoundHandler(h http.Handler) {
+func (w *Weavebox) SetNotFound(h http.Handler) {
 	w.router.NotFound = h
 }
 
@@ -242,19 +235,11 @@ func (w *Weavebox) makeHTTPRouterHandle(h Handler) httprouter.Handle {
 			request:  r,
 			weavebox: w,
 		}
-
-		defer func() {
-			if err := recover(); err != nil {
-				trace := make([]byte, 256)
-				n := runtime.Stack(trace, true)
-				w.logger.Log("recoverd", err, "stacktrace", string(trace[:n]))
-				w.ErrorHandler(ctx, fmt.Errorf("%v", err))
+		for _, handler := range w.middleware {
+			if err := handler(ctx); err != nil {
+				w.ErrorHandler(ctx, err)
 				return
 			}
-		}()
-
-		for i := len(w.middleware) - 1; i >= 0; i-- {
-			h = w.middleware[i](h)
 		}
 		if err := h(ctx); err != nil {
 			w.ErrorHandler(ctx, err)
@@ -362,12 +347,6 @@ func (c *Context) Header(name string) string {
 	return c.request.Header.Get(name)
 }
 
-// SetHeader set a header to the response. If the header allready exists the
-// value will be overidden.
-func (c *Context) SetHeader(key, value string) {
-	c.response.Header().Set(key, value)
-}
-
 // Redirect redirects the request to the provided URL with the given status code.
 func (c *Context) Redirect(url string, code int) error {
 	if code < http.StatusMultipleChoices || code > http.StatusTemporaryRedirect {
@@ -375,54 +354,6 @@ func (c *Context) Redirect(url string, code int) error {
 	}
 	http.Redirect(c.response, c.request, url, code)
 	return nil
-}
-
-// Set can be used to store values in the context. Weavebox uses Google context
-// for passing that value arround requests in a thread safe way.
-func (c *Context) Set(key string, value interface{}) {
-	c.Context = context.WithValue(c.Context, key, value)
-}
-
-// Get retrieves the stored value from the context.
-func (c *Context) Get(key string) interface{} {
-	return c.Context.Value(key)
-}
-
-type HTTPError struct {
-	Code        int    `json:"code"`
-	Description string `json:"description"`
-}
-
-// Error implements the error interface
-func (e HTTPError) Error() string {
-	return e.Description
-}
-
-// HTTPError is helper function that constructs an error of type HTTPError.
-// Returning HTTPErrors in handlers can be a verry productive way of handling
-// errors in your handler and central errorHandler.
-//
-// 	func errorHandler(c *weavebox.Context, err error) {
-//  	if httpErr, ok := err.(weavebox.HTTPError); ok {
-//			c.JSON(httpErr.Code, httpErr)
-//		}
-//  }
-//
-// This will give you always the correct statusCode passed in the handler and
-// will also give you a nice JSON reponse.
-func (c *Context) HTTPError(code int, desc string) HTTPError {
-	return HTTPError{
-		Code:        code,
-		Description: desc,
-	}
-}
-
-// Log provides a structured logging tool based on go-kit's logger. Weavebox
-// thinks structured logging is key in modern api's and webapps, its readable and
-// eazy for machines to parse it.
-// EG: c.Log("handler", "CreateUser", "input", User, "took", time.Since(start))
-func (c *Context) Log(keyvals ...interface{}) {
-	c.weavebox.logger.Log(keyvals...)
 }
 
 type responseLogger struct {
